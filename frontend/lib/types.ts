@@ -85,7 +85,7 @@ export const CUSTOM_ZONE_OPTIONS: { type: CustomZoneType; label: string; icon: s
 
 // ─── Other model types ────────────────────────────────────
 export interface ScheduleRow { poli: string; dokter: string; jam: string; }
-export interface Media        { id: string; filename: string; url: string; type: string; createdAt: string; }
+export interface Media        { id: string; filename: string; url: string; type: 'VIDEO' | 'IMAGE'; createdAt: string; }
 export interface QueueSlot    { slotNumber: number; loketName: string; currentNumber: string; updatedAt: string; }
 export interface Channel      { id: string; code: number; name: string; }
 
