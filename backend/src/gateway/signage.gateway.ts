@@ -9,8 +9,15 @@ import { Logger } from '@nestjs/common';
 
 @WebSocketGateway({
   cors: {
-    origin: '*',
+    origin: [
+      'http://localhost:3000',
+      'http://localhost:3002',
+      /\.vercel\.app$/,
+      /\.railway\.app$/,
+      '*',
+    ],
     methods: ['GET', 'POST'],
+    credentials: true,
   },
 })
 export class SignageGateway implements OnGatewayConnection, OnGatewayDisconnect {

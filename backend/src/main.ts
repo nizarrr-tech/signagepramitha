@@ -18,9 +18,16 @@ async function bootstrap() {
   const app = await NestFactory.create(AppModule);
 
   app.enableCors({
-    origin: '*',
+    origin: [
+      'http://localhost:3000',
+      'http://localhost:3002',
+      process.env.FRONTEND_URL || 'https://signagepramitha.vercel.app',
+      /\.vercel\.app$/,
+      /\.railway\.app$/,
+    ],
     methods: 'GET,HEAD,PUT,PATCH,POST,DELETE,OPTIONS',
     allowedHeaders: 'Content-Type, Accept, Authorization',
+    credentials: true,
   });
 
   app.useGlobalPipes(new ValidationPipe({ whitelist: true, transform: true }));
