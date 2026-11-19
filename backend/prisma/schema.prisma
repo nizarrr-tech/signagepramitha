@@ -3,10 +3,8 @@ generator client {
 }
 
 datasource db {
-  provider     = "mysql"
-  url          = env("DATABASE_URL")
-  // PlanetScale tidak support foreign keys — Prisma handle di aplikasi
-  relationMode = "prisma"
+  provider = "mysql"
+  url      = env("DATABASE_URL")
 }
 
 model Client {
@@ -50,8 +48,6 @@ model SignageContent {
   clinicName     String   @default("Klinik Pramitha")
   themeColor     String   @default("#dc2626")
   updatedAt      DateTime @updatedAt
-
-  @@index([clientId])
 }
 
 model QueueSlot {
@@ -64,5 +60,4 @@ model QueueSlot {
   updatedAt     DateTime @updatedAt
 
   @@unique([clientId, slotNumber])
-  @@index([clientId])
 }
