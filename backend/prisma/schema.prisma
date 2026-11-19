@@ -53,3 +53,9 @@ model QueueSlot {
 
   @@unique([clientId, slotNumber])
 }
+
+model CmsPassword {
+  id        String   @id @default(cuid())
+  password  String
+  createdAt DateTime @default(now())
+}

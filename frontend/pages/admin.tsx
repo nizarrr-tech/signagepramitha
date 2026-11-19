@@ -2,10 +2,11 @@ import { useState, useEffect, useCallback } from 'react';
 import toast from 'react-hot-toast';
 import {
   Monitor, Film, Image as ImageIcon, AlignLeft, Calendar,
-  Send, Loader2, Layout, Settings, Eye, EyeOff,
-  Upload, X, ChevronRight, Palette, Lock, LogOut
+  Send, Loader2, Layout, Settings,
+  Eye, Upload, X, ChevronRight, Palette, Lock, LogOut
 } from 'lucide-react';
 import NavBar from '../components/NavBar';
+import LoginGate from '../components/LoginGate';
 import MediaUpload from '../components/MediaUpload';
 import ScheduleEditor from '../components/ScheduleEditor';
 import LayoutEditor from '../components/LayoutEditor';
@@ -13,15 +14,13 @@ import {
   fetchSignageConfig, updateSignageContent,
   fetchVideos, fetchImages, uploadFile, API_URL,
 } from '../lib/api';
+import { clearSession } from '../lib/auth';
 import {
   Media, ScheduleRow, SignageContent,
   LayoutConfig, DEFAULT_LAYOUT
 } from '../lib/types';
 
-const CLIENT_ID  = 'PRAMITHA';
-// ── Ganti password di sini sesuai keinginan ──
-const CMS_PASSWORD = 'pramitha2024';
-const AUTH_KEY     = 'cms_auth_pramitha';
+const CLIENT_ID = 'PRAMITHA';
 
 const TABS = [
   { id: 'content',  label: 'Konten',        icon: Monitor   },
@@ -33,136 +32,18 @@ const TABS = [
 
 type TabId = typeof TABS[number]['id'];
 
-// ─────────────────────────────────────────────
-// LOGIN SCREEN
-// ─────────────────────────────────────────────
-function LoginScreen({ onLogin }: { onLogin: () => void }) {
-  const [pw,      setPw]      = useState('');
-  const [show,    setShow]    = useState(false);
-  const [error,   setError]   = useState('');
-  const [loading, setLoading] = useState(false);
-
-  const handleSubmit = (e: React.FormEvent) => {
-    e.preventDefault();
-    setLoading(true);
-    setTimeout(() => {
-      if (pw === CMS_PASSWORD) {
-        sessionStorage.setItem(AUTH_KEY, '1');
-        onLogin();
-      } else {
-        setError('Password salah. Hubungi administrator.');
-        setPw('');
-      }
-      setLoading(false);
-    }, 600);
-  };
-
-  return (
-    <div className="min-h-screen bg-gray-950 flex items-center justify-center px-4">
-      <div className="w-full max-w-sm">
-        {/* Logo */}
-        <div className="text-center mb-8">
-          <div className="w-16 h-16 rounded-2xl bg-red-600 flex items-center justify-center mx-auto mb-4 shadow-lg shadow-red-900/40">
-            <Monitor size={30} className="text-white" />
-          </div>
-          <h1 className="text-2xl font-bold text-white">Digital Signage CMS</h1>
-          <p className="text-gray-500 text-sm mt-1">Klinik Pramitha</p>
-        </div>
-
-        {/* Card */}
-        <div className="bg-gray-900 border border-gray-800 rounded-2xl p-7 shadow-xl">
-          <div className="flex items-center gap-2 mb-5">
-            <Lock size={16} className="text-red-400" />
-            <span className="text-sm font-semibold text-white">Masukkan Password CMS</span>
-          </div>
-
-          <form onSubmit={handleSubmit} className="space-y-4">
-            <div className="relative">
-              <input
-                type={show ? 'text' : 'password'}
-                className="input pr-10 text-sm"
-                placeholder="Password..."
-                value={pw}
-                onChange={e => { setPw(e.target.value); setError(''); }}
-                autoFocus
-              />
-              <button
-                type="button"
-                onClick={() => setShow(!show)}
-                className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-500 hover:text-white"
-              >
-                {show ? <EyeOff size={16} /> : <Eye size={16} />}
-              </button>
-            </div>
-
-            {error && (
-              <div className="bg-red-950/50 border border-red-800 rounded-xl px-4 py-2.5 text-sm text-red-400 flex items-center gap-2">
-                <X size={14} className="flex-shrink-0" /> {error}
-              </div>
-            )}
-
-            <button
-              type="submit"
-              disabled={loading || !pw}
-              className="w-full py-3 rounded-xl font-bold text-white flex items-center justify-center gap-2 disabled:opacity-50 transition-all bg-red-600 hover:bg-red-500"
-            >
-              {loading ? <Loader2 size={16} className="animate-spin" /> : <Lock size={16} />}
-              {loading ? 'Memverifikasi...' : 'Masuk ke CMS'}
-            </button>
-          </form>
-
-          <p className="text-xs text-gray-600 text-center mt-5">
-            Butuh akses? Hubungi administrator sistem.
-          </p>
-        </div>
-
-        {/* Player link — tanpa password */}
-        <div className="mt-5 text-center">
-          <a
-            href="/player?client=PRAMITHA"
-            target="_blank"
-            rel="noopener noreferrer"
-            className="text-xs text-gray-600 hover:text-gray-400 transition-colors inline-flex items-center gap-1.5"
-          >
-            <Monitor size={12} /> Buka Player Layar (tanpa password)
-          </a>
-        </div>
-      </div>
-    </div>
-  );
-}
-
-// ─────────────────────────────────────────────
-// MAIN ADMIN PAGE
-// ─────────────────────────────────────────────
 export default function AdminPage() {
-  const [authed,   setAuthed]   = useState(false);
-  const [checked,  setChecked]  = useState(false);
-
-  // Cek session saat load
-  useEffect(() => {
-    if (typeof window !== 'undefined') {
-      const ok = sessionStorage.getItem(AUTH_KEY) === '1';
-      setAuthed(ok);
-    }
-    setChecked(true);
-  }, []);
-
-  const handleLogout = () => {
-    sessionStorage.removeItem(AUTH_KEY);
-    setAuthed(false);
-  };
-
-  if (!checked) return null;
-  if (!authed) return <LoginScreen onLogin={() => setAuthed(true)} />;
-
-  return <AdminContent onLogout={handleLogout} />;
+  return (
+    <LoginGate title="Admin CMS">
+      <AdminContent />
+    </LoginGate>
+  );
 }
 
 // ─────────────────────────────────────────────
 // ADMIN CONTENT (setelah login)
 // ─────────────────────────────────────────────
-function AdminContent({ onLogout }: { onLogout: () => void }) {
+function AdminContent() {
   const [loading,    setLoading]    = useState(true);
   const [publishing, setPublishing] = useState(false);
   const [tab,        setTab]        = useState<TabId>('content');
@@ -267,7 +148,7 @@ function AdminContent({ onLogout }: { onLogout: () => void }) {
                 {publishing ? <Loader2 size={15} className="animate-spin" /> : <Send size={15} />}
                 {publishing ? 'Mengirim...' : 'Publish ke Layar'}
               </button>
-              <button onClick={() => { if(confirm('Keluar dari CMS?')) onLogout(); }}
+              <button onClick={() => { if(confirm('Keluar dari CMS?')) { clearSession(); window.location.reload(); } }}
                 className="flex items-center gap-2 px-3 py-2 rounded-lg border border-gray-700 text-gray-500 hover:text-red-400 hover:border-red-700 text-sm transition-colors"
                 title="Logout">
                 <LogOut size={15} />
@@ -551,7 +432,7 @@ function AdminContent({ onLogout }: { onLogout: () => void }) {
                 const CMS_PASSWORD = '{`pramitha2024`}';
               </div>
               <p className="text-xs text-gray-600 mt-2">Ganti nilainya lalu push ke GitHub untuk memperbarui password.</p>
-              <button onClick={() => { if(confirm('Keluar dari CMS?')) onLogout(); }}
+              <button onClick={() => { if(confirm('Keluar dari CMS?')) { clearSession(); window.location.reload(); } }}
                 className="mt-4 w-full py-2 rounded-xl text-sm font-semibold text-red-400 border border-red-800 hover:bg-red-900/20 flex items-center justify-center gap-2 transition-colors">
                 <LogOut size={14} /> Keluar / Logout
               </button>
