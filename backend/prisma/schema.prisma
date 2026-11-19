@@ -1,0 +1,63 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "mysql"
+  url      = env("DATABASE_URL")
+}
+
+model Client {
+  id               String          @id
+  description      String          @default("")
+  activeTemplateId String?
+  activeChannelId  String?
+  signageContent   SignageContent?
+  queueSlots       QueueSlot[]
+  createdAt        DateTime        @default(now())
+  updatedAt        DateTime        @updatedAt
+}
+
+model MediaResource {
+  id        String   @id @default(cuid())
+  filename  String
+  url       String   @db.Text
+  publicId  String?
+  type      String   // "VIDEO" | "IMAGE"
+  duration  Int?
+  createdAt DateTime @default(now())
+}
+
+model TvChannel {
+  id        String   @id @default(cuid())
+  code      Int      @unique
+  name      String
+  createdAt DateTime @default(now())
+}
+
+model SignageContent {
+  id             String   @id @default(cuid())
+  clientId       String   @unique
+  client         Client   @relation(fields: [clientId], references: [id])
+  videoUrls      String   @db.Text
+  slideUrls      String   @db.Text
+  runningText    String   @db.Text
+  scheduleTable  String   @db.Text
+  backgroundUrl  String   @db.Text
+  layoutConfig   String   @db.Text
+  clinicName     String   @default("Klinik Pramitha")
+  themeColor     String   @default("#dc2626")
+  updatedAt      DateTime @updatedAt
+}
+
+model QueueSlot {
+  id            String   @id @default(cuid())
+  clientId      String
+  client        Client   @relation(fields: [clientId], references: [id])
+  slotNumber    Int
+  loketName     String   @default("")
+  currentNumber String   @default("")
+  updatedAt     DateTime @updatedAt
+
+  @@unique([clientId, slotNumber])
+}

@@ -1,0 +1,857 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Digital Signage Player</title>
+  <script src="https://cdn.socket.io/4.6.1/socket.io.min.js"></script>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+
+    html, body {
+      width: 100vw;
+      height: 100vh;
+      height: 100dvh; /* dynamic viewport — tidak terpengaruh browser UI */
+      overflow: hidden;
+      background: #6b0000;
+      font-family: 'Segoe UI', Arial, sans-serif;
+    }
+
+    /* ─── Auto-scale canvas ─── */
+    #canvas-wrapper {
+      position: fixed;
+      top: 0; left: 0;
+      width: 100vw;
+      height: 100vh;
+      background: #6b0000;
+      overflow: hidden;
+    }
+
+    #canvas {
+      position: absolute;
+      width: 1920px;
+      height: 1080px;
+      overflow: hidden;
+      /* transform dan top/left diset oleh JS */
+      transform-origin: 0 0;
+    }
+
+    /* ─── Tombol fullscreen ─── */
+    #fs-btn {
+      position: fixed;
+      bottom: 18px; right: 18px;
+      z-index: 9999;
+      background: rgba(139,0,0,0.85);
+      border: 2px solid rgba(255,255,255,0.4);
+      color: white;
+      border-radius: 10px;
+      padding: 10px 18px;
+      font-size: 14px;
+      font-weight: 700;
+      cursor: pointer;
+      backdrop-filter: blur(6px);
+      transition: opacity 0.3s;
+      letter-spacing: 0.5px;
+    }
+    #fs-btn:hover { background: rgba(185,0,0,0.95); }
+    #fs-btn.hidden { opacity: 0; pointer-events: none; }
+
+    .zone { position: absolute; overflow: hidden; }
+
+    /* ─── Background ─── */
+    #zone-bg {
+      left: 0; top: 0; width: 1920px; height: 1080px;
+      /* Merah-putih gradient default bila tidak ada gambar */
+      background: linear-gradient(160deg, #7f0000 0%, #c0392b 30%, #e8e8e8 60%, #ffffff 100%);
+      z-index: 0;
+    }
+    #zone-bg::before {
+      content: '';
+      position: absolute; inset: 0;
+      background: url("data:image/svg+xml,%3Csvg width='60' height='60' viewBox='0 0 60 60' xmlns='http://www.w3.org/2000/svg'%3E%3Cg fill='none' fill-rule='evenodd'%3E%3Cg fill='%23dc2626' fill-opacity='0.04'%3E%3Cpath d='M36 34v-4h-2v4h-4v2h4v4h2v-4h4v-2h-4zm0-30V0h-2v4h-4v2h4v4h2V6h4V4h-4zM6 34v-4H4v4H0v2h4v4h2v-4h4v-2H6zM6 4V0H4v4H0v2h4v4h2V6h4V4H6z'/%3E%3C/g%3E%3C/g%3E%3C/svg%3E");
+    }
+    #zone-bg img {
+      width: 100%; height: 100%; object-fit: cover;
+      position: absolute; top: 0; left: 0;
+    }
+
+    /* ─── Queue Slots ─── */
+    .queue-slot {
+      left: 5px;
+      width: 597px; height: 190px;
+      border-radius: 16px;
+      border: 3px solid rgba(255,255,255,0.25);
+      background: linear-gradient(135deg, rgba(139,0,0,0.92) 0%, rgba(185,0,0,0.88) 100%);
+      display: flex;
+      align-items: center;
+      padding: 0 24px;
+      gap: 20px;
+      z-index: 10;
+      box-shadow: 4px 4px 20px rgba(0,0,0,0.4), inset 0 1px 0 rgba(255,255,255,0.1);
+      backdrop-filter: blur(8px);
+    }
+    #slot-1 { top: 9px; }
+    #slot-2 { top: 203px; }
+    #slot-3 { top: 397px; }
+    #slot-4 { top: 590px; }
+    #slot-5 { top: 784px; }
+
+    /* Garis merah vertikal kiri */
+    .queue-slot::before {
+      content: '';
+      position: absolute;
+      left: 0; top: 10%; height: 80%;
+      width: 6px;
+      background: linear-gradient(to bottom, #ff6b6b, #fff, #ff6b6b);
+      border-radius: 3px;
+    }
+
+    .slot-label {
+      flex: 1;
+      line-height: 1.3;
+      text-shadow: 0 2px 6px rgba(0,0,0,0.5);
+    }
+    .slot-title {
+      font-size: 20px;
+      color: rgba(255,220,220,0.85);
+      font-weight: 600;
+      margin-bottom: 4px;
+      text-transform: uppercase;
+      letter-spacing: 1.5px;
+    }
+    .slot-name {
+      font-size: 30px;
+      color: #fff;
+      font-weight: 800;
+    }
+    .slot-number {
+      font-size: 84px;
+      font-weight: 900;
+      font-family: 'Courier New', monospace;
+      color: #FFFFFF;
+      text-shadow: 0 0 30px rgba(255,100,100,0.7), 0 4px 10px rgba(0,0,0,0.6);
+      letter-spacing: 4px;
+      min-width: 190px;
+      text-align: center;
+      line-height: 1;
+    }
+
+    /* Flash animation — merah-putih */
+    @keyframes slotFlash {
+      0%, 100% {
+        background: linear-gradient(135deg, rgba(139,0,0,0.92), rgba(185,0,0,0.88));
+        border-color: rgba(255,255,255,0.25);
+        box-shadow: 4px 4px 20px rgba(0,0,0,0.4);
+      }
+      25%, 75% {
+        background: linear-gradient(135deg, rgba(255,255,255,0.95), rgba(255,230,230,0.9));
+        border-color: #cc0000;
+        box-shadow: 0 0 60px rgba(255,0,0,0.7), inset 0 0 40px rgba(255,0,0,0.1);
+      }
+      50% {
+        background: linear-gradient(135deg, #ffffff, #ffe0e0);
+        border-color: #ff0000;
+        box-shadow: 0 0 90px rgba(255,0,0,0.9), 0 0 30px rgba(255,100,100,0.5);
+      }
+    }
+    .queue-slot.calling {
+      animation: slotFlash 0.55s ease-in-out 6;
+    }
+    /* Teks slot saat flash */
+    .queue-slot.calling .slot-name,
+    .queue-slot.calling .slot-number {
+      animation: textFlash 0.55s ease-in-out 6;
+    }
+    @keyframes textFlash {
+      0%, 100% { color: #fff; text-shadow: 0 0 30px rgba(255,100,100,0.7); }
+      50% { color: #cc0000; text-shadow: 0 0 20px rgba(200,0,0,0.5); }
+    }
+
+    /* ─── Video Player ─── */
+    #zone-video {
+      left: 628px; top: 155px;
+      width: 1274px; height: 622px;
+      background: #000;
+      border-radius: 14px;
+      overflow: hidden;
+      z-index: 10;
+      border: 3px solid rgba(220,38,38,0.4);
+      box-shadow: 0 8px 32px rgba(0,0,0,0.5);
+    }
+    #zone-video video { width: 100%; height: 100%; object-fit: cover; }
+    .video-placeholder {
+      width: 100%; height: 100%;
+      display: flex; flex-direction: column;
+      align-items: center; justify-content: center;
+      background: linear-gradient(135deg, #1a0000 0%, #3d0000 50%, #1a0000 100%);
+    }
+    .video-placeholder .play-icon {
+      width: 80px; height: 80px;
+      border-radius: 50%;
+      background: rgba(220,38,38,0.2);
+      border: 2px solid rgba(220,38,38,0.4);
+      display: flex; align-items: center; justify-content: center;
+      margin-bottom: 16px;
+    }
+    .video-placeholder svg { opacity: 0.5; }
+    .video-placeholder span { color: rgba(255,180,180,0.5); font-size: 22px; }
+
+    /* ─── Slideshow ─── */
+    #zone-slide {
+      left: 625px; top: 790px;
+      width: 640px; height: 188px;
+      background: #1a0000;
+      border-radius: 12px;
+      overflow: hidden;
+      z-index: 10;
+      border: 3px solid rgba(220,38,38,0.4);
+      box-shadow: 0 4px 16px rgba(0,0,0,0.4);
+    }
+    .slide-img {
+      position: absolute; top: 0; left: 0;
+      width: 100%; height: 100%;
+      object-fit: cover;
+      opacity: 0;
+      transition: opacity 1s ease-in-out;
+    }
+    .slide-img.active { opacity: 1; }
+
+    /* ─── Schedule Table ─── */
+    #zone-table {
+      left: 1272px; top: 790px;
+      width: 639px; height: 188px;
+      background: rgba(139, 0, 0, 0.92);
+      border-radius: 12px;
+      overflow: hidden;
+      z-index: 10;
+      border: 3px solid rgba(255,255,255,0.15);
+      box-shadow: 0 4px 16px rgba(0,0,0,0.4);
+      backdrop-filter: blur(8px);
+      padding: 10px 14px;
+    }
+    #zone-table .tbl-header {
+      display: grid;
+      grid-template-columns: 155px 1fr 145px;
+      gap: 6px;
+      padding: 6px 8px;
+      background: rgba(0,0,0,0.35);
+      border-radius: 6px;
+      margin-bottom: 4px;
+      font-size: 17px;
+      font-weight: 800;
+      color: rgba(255,220,220,0.95);
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+    }
+    #zone-table .tbl-row {
+      display: grid;
+      grid-template-columns: 155px 1fr 145px;
+      gap: 6px;
+      padding: 5px 8px;
+      border-bottom: 1px solid rgba(255,255,255,0.08);
+      font-size: 16px;
+      color: rgba(255,240,240,0.9);
+    }
+    #zone-table .tbl-row:last-child { border-bottom: none; }
+    #zone-table .tbl-row .col-poli { color: #fca5a5; font-weight: 700; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    #zone-table .tbl-row .col-dokter { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    #zone-table .tbl-row .col-jam { color: #fde68a; font-weight: 600; text-align: right; white-space: nowrap; }
+
+    /* ─── Running Text ─── */
+    #zone-rtext {
+      left: 0; top: 1011px;
+      width: 1551px; height: 67px;
+      background: linear-gradient(90deg, #7f0000 0%, #b91c1c 15%, #dc2626 100%);
+      border-radius: 0 8px 8px 0;
+      display: flex; align-items: center;
+      overflow: hidden;
+      z-index: 20;
+      border-top: 2px solid rgba(255,255,255,0.2);
+      border-right: 2px solid rgba(255,255,255,0.1);
+      box-shadow: 2px 0 20px rgba(139,0,0,0.6);
+    }
+    .rtext-label {
+      flex-shrink: 0;
+      background: rgba(0,0,0,0.4);
+      height: 100%;
+      display: flex; align-items: center;
+      padding: 0 22px;
+      font-size: 22px;
+      font-weight: 900;
+      color: white;
+      letter-spacing: 2px;
+      text-transform: uppercase;
+      white-space: nowrap;
+      border-right: 2px solid rgba(255,255,255,0.15);
+    }
+    .rtext-track {
+      flex: 1; overflow: hidden;
+      position: relative; height: 100%;
+    }
+    .rtext-content {
+      position: absolute;
+      white-space: nowrap;
+      font-size: 28px;
+      font-weight: 700;
+      color: #FFFFFF;
+      top: 50%; transform: translateY(-50%);
+      animation: scrollText linear infinite;
+      text-shadow: 0 2px 8px rgba(0,0,0,0.3);
+      letter-spacing: 0.5px;
+    }
+    @keyframes scrollText {
+      0%  { left: 100%; }
+      100% { left: -100%; }
+    }
+
+    /* ─── DateTime ─── */
+    #zone-datetime {
+      left: 1562px; top: 994px;
+      width: 347px; height: 79px;
+      background: linear-gradient(135deg, #7f0000 0%, #b91c1c 100%);
+      border-radius: 8px 8px 0 0;
+      display: flex; flex-direction: column;
+      align-items: center; justify-content: center;
+      z-index: 20;
+      border: 2px solid rgba(255,255,255,0.2);
+      border-bottom: none;
+      box-shadow: 0 -4px 20px rgba(139,0,0,0.5);
+      gap: 2px;
+    }
+    #time-display {
+      font-size: 34px;
+      font-weight: 900;
+      color: #FFFFFF;
+      font-family: 'Courier New', monospace;
+      letter-spacing: 3px;
+      text-shadow: 0 0 20px rgba(255,100,100,0.4);
+    }
+    #date-display {
+      font-size: 14px;
+      color: rgba(255,220,220,0.9);
+      font-weight: 600;
+      letter-spacing: 0.3px;
+    }
+
+    /* ─── Hiasan garis merah dekoratif ─── */
+    .deco-line-top {
+      position: absolute;
+      left: 5px; top: 0;
+      width: 597px; height: 4px;
+      background: linear-gradient(90deg, transparent, rgba(255,255,255,0.4), transparent);
+      z-index: 15;
+      border-radius: 2px;
+    }
+    .deco-stripe {
+      position: absolute;
+      left: 606px; top: 0;
+      width: 14px; height: 1080px;
+      background: repeating-linear-gradient(
+        180deg,
+        #dc2626 0px, #dc2626 20px,
+        #ffffff 20px, #ffffff 40px
+      );
+      opacity: 0.15;
+      z-index: 5;
+    }
+
+    /* ─── Connection status overlay ─── */
+    #conn-status {
+      position: fixed;
+      top: 12px; right: 12px;
+      z-index: 999;
+      padding: 6px 14px;
+      border-radius: 20px;
+      font-size: 14px;
+      font-weight: 600;
+      transition: all 0.3s;
+    }
+    #conn-status.connected { background: rgba(220,38,38,0.2); border: 1px solid #dc2626; color: #fca5a5; }
+    #conn-status.disconnected { background: rgba(0,0,0,0.5); border: 1px solid #666; color: #aaa; }
+    #conn-status.connecting { background: rgba(255,165,0,0.2); border: 1px solid #f59e0b; color: #fde68a; }
+
+    /* ─── TTS Notification Banner ─── */
+    #tts-banner {
+      position: fixed;
+      bottom: 110px;
+      left: 50%;
+      transform: translateX(-50%) translateY(120px);
+      background: linear-gradient(135deg, #7f0000, #c0392b);
+      border: 3px solid #fff;
+      border-radius: 20px;
+      padding: 22px 55px;
+      text-align: center;
+      z-index: 999;
+      transition: transform 0.5s cubic-bezier(0.175,0.885,0.32,1.275), opacity 0.5s;
+      opacity: 0;
+      box-shadow: 0 0 60px rgba(220,38,38,0.6), 0 20px 60px rgba(0,0,0,0.5);
+    }
+    #tts-banner.show {
+      transform: translateX(-50%) translateY(0);
+      opacity: 1;
+    }
+    #tts-banner .tts-title {
+      font-size: 18px;
+      color: rgba(255,220,220,0.85);
+      text-transform: uppercase;
+      letter-spacing: 3px;
+      margin-bottom: 8px;
+    }
+    #tts-banner .tts-num {
+      font-size: 76px;
+      font-weight: 900;
+      color: #FFFFFF;
+      font-family: 'Courier New', monospace;
+      letter-spacing: 6px;
+      line-height: 1;
+      text-shadow: 0 0 30px rgba(255,100,100,0.5);
+    }
+    #tts-banner .tts-loket {
+      font-size: 30px;
+      color: rgba(255,220,220,0.9);
+      margin-top: 8px;
+      font-weight: 700;
+    }
+    #tts-banner .tts-sep {
+      width: 60px; height: 3px;
+      background: rgba(255,255,255,0.4);
+      margin: 10px auto;
+      border-radius: 2px;
+    }
+
+    /* ─── Logo/Nama klinik di sudut video ─── */
+    #clinic-name {
+      position: absolute;
+      left: 628px; top: 155px;
+      z-index: 15;
+      background: linear-gradient(90deg, rgba(139,0,0,0.9), transparent);
+      padding: 10px 30px 10px 18px;
+      border-radius: 14px 0 0 0;
+      font-size: 22px;
+      font-weight: 800;
+      color: white;
+      letter-spacing: 1px;
+      text-transform: uppercase;
+      text-shadow: 0 2px 6px rgba(0,0,0,0.4);
+    }
+  </style>
+</head>
+<body>
+
+<!-- Tombol Fullscreen -->
+<button id="fs-btn">⛶ Fullscreen</button>
+
+<!-- Connection status -->
+<div id="conn-status" class="connecting">⬤ Connecting...</div>
+
+<!-- TTS banner -->
+<div id="tts-banner">
+  <div class="tts-title">Nomor Antrian Dipanggil</div>
+  <div id="tts-num" class="tts-num">A001</div>
+  <div class="tts-sep"></div>
+  <div id="tts-loket" class="tts-loket">Loket 1</div>
+</div>
+
+<div id="canvas-wrapper">
+  <div id="canvas">
+
+    <!-- Background -->
+    <div class="zone" id="zone-bg"></div>
+
+    <!-- Dekorasi -->
+    <div class="deco-stripe"></div>
+    <div class="deco-line-top"></div>
+
+    <!-- Queue Slots 1-5 -->
+    <div class="zone queue-slot" id="slot-1">
+      <div class="slot-label">
+        <div class="slot-title" id="slot-1-title">Loket 1</div>
+        <div class="slot-name" id="slot-1-name">Nomor Antrian</div>
+      </div>
+      <div class="slot-number" id="slot-1-num">000</div>
+    </div>
+    <div class="zone queue-slot" id="slot-2">
+      <div class="slot-label">
+        <div class="slot-title" id="slot-2-title">Loket 2</div>
+        <div class="slot-name" id="slot-2-name">Nomor Antrian</div>
+      </div>
+      <div class="slot-number" id="slot-2-num">000</div>
+    </div>
+    <div class="zone queue-slot" id="slot-3">
+      <div class="slot-label">
+        <div class="slot-title" id="slot-3-title">Loket 3</div>
+        <div class="slot-name" id="slot-3-name">Nomor Antrian</div>
+      </div>
+      <div class="slot-number" id="slot-3-num">000</div>
+    </div>
+    <div class="zone queue-slot" id="slot-4">
+      <div class="slot-label">
+        <div class="slot-title" id="slot-4-title">Loket 4</div>
+        <div class="slot-name" id="slot-4-name">Nomor Antrian</div>
+      </div>
+      <div class="slot-number" id="slot-4-num">000</div>
+    </div>
+    <div class="zone queue-slot" id="slot-5">
+      <div class="slot-label">
+        <div class="slot-title" id="slot-5-title">Loket 5</div>
+        <div class="slot-name" id="slot-5-name">Nomor Antrian</div>
+      </div>
+      <div class="slot-number" id="slot-5-num">000</div>
+    </div>
+
+    <!-- Video Player -->
+    <div class="zone" id="zone-video">
+      <div class="video-placeholder" id="video-placeholder">
+        <div class="play-icon">
+          <svg width="36" height="36" viewBox="0 0 24 24" fill="white"><path d="M8 5v14l11-7z"/></svg>
+        </div>
+        <span>Menunggu video...</span>
+      </div>
+      <video id="main-video" style="display:none" autoplay muted playsinline></video>
+    </div>
+
+    <!-- Nama klinik overlay di video -->
+    <div id="clinic-name">Klinik Pramitha</div>
+
+    <!-- Slideshow -->
+    <div class="zone" id="zone-slide">
+      <div style="width:100%;height:100%;background:linear-gradient(135deg,#3d0000,#000);display:flex;align-items:center;justify-content:center;color:rgba(255,150,150,0.3);font-size:16px;" id="slide-placeholder">
+        Menunggu slide...
+      </div>
+    </div>
+
+    <!-- Schedule Table -->
+    <div class="zone" id="zone-table">
+      <div class="tbl-header">
+        <span>Poli</span><span>Dokter</span><span style="text-align:right">Jam</span>
+      </div>
+      <div id="tbl-body">
+        <div class="tbl-row" style="grid-template-columns:1fr;text-align:center;color:rgba(255,200,200,0.4);">
+          Memuat jadwal...
+        </div>
+      </div>
+    </div>
+
+    <!-- Running Text -->
+    <div class="zone" id="zone-rtext">
+      <div class="rtext-label">INFO</div>
+      <div class="rtext-track">
+        <div class="rtext-content" id="rtext-content">Memuat informasi...</div>
+      </div>
+    </div>
+
+    <!-- DateTime -->
+    <div class="zone" id="zone-datetime">
+      <div id="time-display">00:00:00</div>
+      <div id="date-display">Memuat tanggal...</div>
+    </div>
+
+  </div>
+</div>
+
+<script>
+// ─── CONFIG ───
+const params = new URLSearchParams(window.location.search);
+const CLIENT_ID = params.get('client') || 'PRAMITHA';
+const API_URL   = params.get('api')    || 'http://localhost:3001';
+
+// ─── AUTO SCALE ───
+const CANVAS_W = 1920, CANVAS_H = 1080;
+const canvas   = document.getElementById('canvas');
+
+function scaleCanvas() {
+  const sw = window.screen.width;
+  const sh = window.screen.height;
+  // Pakai screen size saat fullscreen, innerWindow saat windowed
+  const vw = document.fullscreenElement ? sw : window.innerWidth;
+  const vh = document.fullscreenElement ? sh : window.innerHeight;
+
+  const scale   = Math.min(vw / CANVAS_W, vh / CANVAS_H);
+  const scaledW = CANVAS_W * scale;
+  const scaledH = CANVAS_H * scale;
+  const left    = (vw - scaledW) / 2;
+  const top     = (vh - scaledH) / 2;
+
+  canvas.style.transform = `scale(${scale})`;
+  canvas.style.left      = left + 'px';
+  canvas.style.top       = top  + 'px';
+}
+
+scaleCanvas();
+window.addEventListener('resize', scaleCanvas);
+document.addEventListener('fullscreenchange', () => setTimeout(scaleCanvas, 50));
+
+// ─── FULLSCREEN HELPER ───
+function enterFullscreen() {
+  const el = document.documentElement;
+  const req = el.requestFullscreen || el.webkitRequestFullscreen
+            || el.mozRequestFullScreen || el.msRequestFullscreen;
+  if (req) req.call(el).catch(() => {});
+}
+
+const fsBtn = document.getElementById('fs-btn');
+fsBtn.addEventListener('click', () => {
+  enterFullscreen();
+});
+
+document.addEventListener('fullscreenchange', () => {
+  fsBtn.textContent = document.fullscreenElement ? '✕ Keluar Fullscreen' : '⛶ Fullscreen';
+  setTimeout(scaleCanvas, 100);
+});
+
+// Sembunyikan tombol FS setelah 6 detik, tampil lagi saat mouse gerak
+let fsTimer = setTimeout(() => fsBtn.classList.add('hidden'), 6000);
+document.addEventListener('mousemove', () => {
+  fsBtn.classList.remove('hidden');
+  clearTimeout(fsTimer);
+  fsTimer = setTimeout(() => fsBtn.classList.add('hidden'), 4000);
+});
+
+// ─── CLOCK ───
+function updateClock() {
+  const now = new Date();
+  document.getElementById('time-display').textContent =
+    now.toLocaleTimeString('id-ID', { hour:'2-digit', minute:'2-digit', second:'2-digit' });
+  const days   = ['Minggu','Senin','Selasa','Rabu','Kamis','Jumat','Sabtu'];
+  const months = ['Januari','Februari','Maret','April','Mei','Juni',
+                  'Juli','Agustus','September','Oktober','November','Desember'];
+  document.getElementById('date-display').textContent =
+    `${days[now.getDay()]}, ${now.getDate()} ${months[now.getMonth()]} ${now.getFullYear()}`;
+}
+updateClock();
+setInterval(updateClock, 1000);
+
+// ─── QUEUE ───
+function renderQueue(slots) {
+  if (!slots?.length) return;
+  slots.forEach(slot => {
+    const n = slot.slotNumber;
+    const t = document.getElementById(`slot-${n}-title`);
+    const m = document.getElementById(`slot-${n}-num`);
+    if (t) t.textContent = slot.loketName || `Loket ${n}`;
+    if (m) m.textContent = slot.currentNumber || '000';
+  });
+}
+
+function flashSlot(n) {
+  const el = document.getElementById(`slot-${n}`);
+  if (!el) return;
+  el.classList.remove('calling');
+  void el.offsetWidth;
+  el.classList.add('calling');
+  setTimeout(() => el.classList.remove('calling'), 4000);
+}
+
+// ─── RUNNING TEXT ───
+function setRunningText(text) {
+  const el = document.getElementById('rtext-content');
+  if (!el || !text) return;
+  el.textContent = text;
+  el.style.animationDuration = Math.max(18, text.length * 0.28) + 's';
+}
+
+// ─── SCHEDULE TABLE ───
+function renderTable(rows) {
+  const body = document.getElementById('tbl-body');
+  if (!body) return;
+  if (!rows?.length) {
+    body.innerHTML = '<div class="tbl-row" style="grid-template-columns:1fr;text-align:center;color:rgba(255,200,200,0.4);">Tidak ada jadwal</div>';
+    return;
+  }
+  const display = rows.slice(0, 4);
+  body.innerHTML = display.map(row => `
+    <div class="tbl-row">
+      <span class="col-poli">${esc(row.poli||'')}</span>
+      <span class="col-dokter">${esc(row.dokter||'')}</span>
+      <span class="col-jam">${esc(row.jam||'')}</span>
+    </div>`).join('');
+
+  if (rows.length > 4) {
+    let off = 0;
+    setInterval(() => {
+      off = (off + 4) % rows.length;
+      const slice = rows.slice(off, off + 4);
+      body.innerHTML = slice.map(row => `
+        <div class="tbl-row">
+          <span class="col-poli">${esc(row.poli||'')}</span>
+          <span class="col-dokter">${esc(row.dokter||'')}</span>
+          <span class="col-jam">${esc(row.jam||'')}</span>
+        </div>`).join('');
+    }, 5000);
+  }
+}
+
+function esc(s) {
+  return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+}
+
+// ─── BACKGROUND ───
+function setBackground(url) {
+  const zone = document.getElementById('zone-bg');
+  if (!url) return;
+  zone.innerHTML = `<img src="${API_URL}${url}" alt="bg" onerror="this.style.display='none'"/>`;
+}
+
+// ─── VIDEO ───
+let videoIndex = 0;
+function initVideo(urls) {
+  const video       = document.getElementById('main-video');
+  const placeholder = document.getElementById('video-placeholder');
+  if (!urls?.length) { video.style.display='none'; placeholder.style.display='flex'; return; }
+
+  video.style.display = 'block';
+  placeholder.style.display = 'none';
+  videoIndex = 0;
+
+  const playNext = () => {
+    video.src = API_URL + urls[videoIndex];
+    video.load();
+    video.play().catch(()=>{});
+  };
+  video.onended = () => { videoIndex = (videoIndex+1) % urls.length; playNext(); };
+  video.onerror = () => { videoIndex = (videoIndex+1) % urls.length; setTimeout(playNext,1000); };
+  playNext();
+}
+
+// ─── SLIDESHOW ───
+let slideTimer = null;
+function initSlideshow(urls) {
+  const zone = document.getElementById('zone-slide');
+  const ph   = document.getElementById('slide-placeholder');
+  if (slideTimer) clearInterval(slideTimer);
+  zone.querySelectorAll('.slide-img').forEach(e => e.remove());
+
+  if (!urls?.length) { if(ph) ph.style.display='flex'; return; }
+  if (ph) ph.style.display = 'none';
+
+  urls.forEach((url, i) => {
+    const img = document.createElement('img');
+    img.className = 'slide-img' + (i===0 ? ' active' : '');
+    img.src = API_URL + url;
+    img.onerror = () => img.style.display = 'none';
+    zone.appendChild(img);
+  });
+
+  let idx = 0;
+  if (urls.length > 1) {
+    slideTimer = setInterval(() => {
+      const slides = zone.querySelectorAll('.slide-img');
+      slides[idx].classList.remove('active');
+      idx = (idx+1) % slides.length;
+      slides[idx].classList.add('active');
+    }, 5000);
+  }
+}
+
+// ─── APPLY STATE ───
+function applyState(data) {
+  if (data.content) {
+    setBackground(data.content.backgroundUrl);
+    initVideo(data.content.videoUrls);
+    initSlideshow(data.content.slideUrls);
+    setRunningText(data.content.runningText);
+    renderTable(data.content.scheduleTable);
+  }
+  if (data.queueSlots) renderQueue(data.queueSlots);
+  try { localStorage.setItem(`signage_cache_${CLIENT_ID}`, JSON.stringify(data)); } catch(e){}
+}
+
+// ─── TTS ───
+let ttsQueue = [], speaking = false;
+function speakText(text) {
+  if (!window.speechSynthesis) return;
+  ttsQueue.push(text);
+  if (!speaking) processTts();
+}
+function processTts() {
+  if (!ttsQueue.length) { speaking=false; return; }
+  speaking = true;
+  const utter = new SpeechSynthesisUtterance(ttsQueue.shift());
+  utter.lang = 'id-ID'; utter.rate = 0.88; utter.pitch = 1.1; utter.volume = 1;
+  const voices = speechSynthesis.getVoices();
+  const v = voices.find(v=>v.lang.startsWith('id')) || voices.find(v=>v.name.includes('Female')) || voices[0];
+  if (v) utter.voice = v;
+  utter.onend = utter.onerror = processTts;
+  speechSynthesis.speak(utter);
+}
+function announceQueue(loket, num) {
+  const digits = {0:'nol',1:'satu',2:'dua',3:'tiga',4:'empat',5:'lima',6:'enam',7:'tujuh',8:'delapan',9:'sembilan'};
+  const spell = num.split('').map(c => digits[c] !== undefined ? digits[c] : c).join(' ');
+  speakText(`Nomor antrian ${spell}, silakan menuju ke ${loket}`);
+}
+function showTtsBanner(num, loket) {
+  const b = document.getElementById('tts-banner');
+  document.getElementById('tts-num').textContent   = num;
+  document.getElementById('tts-loket').textContent = loket;
+  b.classList.add('show');
+  setTimeout(() => b.classList.remove('show'), 5500);
+}
+
+if (window.speechSynthesis) {
+  speechSynthesis.getVoices();
+  speechSynthesis.onvoiceschanged = () => speechSynthesis.getVoices();
+}
+
+// ─── WEBSOCKET ───
+const statusEl = document.getElementById('conn-status');
+const socket   = io(API_URL, {
+  query: { clientId: CLIENT_ID },
+  transports: ['websocket','polling'],
+  reconnection: true,
+  reconnectionAttempts: Infinity,
+  reconnectionDelay: 2000,
+});
+
+socket.on('connect', () => {
+  statusEl.className = 'connected';
+  statusEl.textContent = '⬤ Live';
+  setTimeout(() => statusEl.style.opacity='0.4', 3000);
+});
+socket.on('disconnect', () => {
+  statusEl.className = 'disconnected';
+  statusEl.textContent = '⬤ Offline — Reconnecting...';
+  statusEl.style.opacity = '1';
+});
+
+socket.on(`queue:${CLIENT_ID}`, data => {
+  const numEl   = document.getElementById(`slot-${data.slotNumber}-num`);
+  const titleEl = document.getElementById(`slot-${data.slotNumber}-title`);
+  if (numEl)   numEl.textContent   = data.currentNumber;
+  if (titleEl) titleEl.textContent = data.loketName;
+  flashSlot(data.slotNumber);
+  showTtsBanner(data.currentNumber, data.loketName);
+  announceQueue(data.loketName, data.currentNumber);
+  try {
+    const c = JSON.parse(localStorage.getItem(`signage_cache_${CLIENT_ID}`) || '{}');
+    if (c.queueSlots) {
+      c.queueSlots = c.queueSlots.map(s => s.slotNumber===data.slotNumber ? {...s,...data} : s);
+      localStorage.setItem(`signage_cache_${CLIENT_ID}`, JSON.stringify(c));
+    }
+  } catch(e){}
+});
+
+socket.on(`refresh:${CLIENT_ID}`, data => applyState(data));
+
+// ─── INITIAL LOAD ───
+async function loadConfig() {
+  try {
+    const res  = await fetch(`${API_URL}/api/signage/${CLIENT_ID}`);
+    if (!res.ok) throw new Error('HTTP ' + res.status);
+    applyState(await res.json());
+  } catch(err) {
+    console.warn('API tidak tersedia, coba cache...', err.message);
+    try {
+      const c = localStorage.getItem(`signage_cache_${CLIENT_ID}`);
+      if (c) {
+        applyState(JSON.parse(c));
+        setRunningText('⚠ Mode offline — menggunakan data cache terakhir');
+      }
+    } catch(e){}
+  }
+}
+
+loadConfig();
+setInterval(loadConfig, 5 * 60 * 1000);
+</script>
+</body>
+</html>
