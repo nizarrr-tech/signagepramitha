@@ -1,7 +1,7 @@
 import { useState, useRef, useCallback, useEffect } from 'react';
 import { RotateCcw, Eye, EyeOff, Plus, Trash2, Settings2, ChevronDown, ChevronUp } from 'lucide-react';
 import {
-  LayoutConfig, DEFAULT_LAYOUT, ZONE_LABELS, ZoneRect,
+  LayoutConfig, LayoutZones, DEFAULT_LAYOUT, ZONE_LABELS, ZoneRect,
   CustomZone, CustomZoneType, CUSTOM_ZONE_OPTIONS,
 } from '../lib/types';
 import { API_URL } from '../lib/api';
@@ -25,7 +25,7 @@ const FIXED_BORDER: Record<string, string> = {
 };
 const EXTRA_COLORS = ['#6366f1','#ec4899','#14b8a6','#f97316','#84cc16','#eab308','#8b5cf6'];
 
-type ZoneKey = keyof Omit<LayoutConfig, 'extras'>;
+type ZoneKey = keyof LayoutZones;
 type AnyKey  = ZoneKey | string; // string = extra zone id
 
 interface DragState { mx: number; my: number; zx: number; zy: number; zw: number; zh: number; }
@@ -153,7 +153,7 @@ export default function LayoutEditor({ layout, onChange }: Props) {
     </>
   );
 
-  const fixedKeys = Object.keys(FIXED_BORDER) as ZoneKey[];
+  const fixedKeys = Object.keys(ZONE_LABELS) as (keyof LayoutZones)[];
 
   return (
     <div className="flex gap-5 select-none">

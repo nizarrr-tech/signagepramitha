@@ -29,7 +29,7 @@ export interface CustomZone extends ZoneRect {
 }
 
 // ─── Fixed layout ─────────────────────────────────────────
-export interface LayoutConfig {
+export interface LayoutZones {
   bg:       ZoneRect;
   slot1:    ZoneRect;
   slot2:    ZoneRect;
@@ -41,6 +41,9 @@ export interface LayoutConfig {
   table:    ZoneRect;
   rtext:    ZoneRect;
   datetime: ZoneRect;
+}
+
+export interface LayoutConfig extends LayoutZones {
   // Extra zones added by user
   extras?:  CustomZone[];
 }
@@ -60,7 +63,7 @@ export const DEFAULT_LAYOUT: LayoutConfig = {
   extras:   [],
 };
 
-export const ZONE_LABELS: Record<keyof Omit<LayoutConfig, 'extras'>, string> = {
+export const ZONE_LABELS: Record<keyof LayoutZones, string> = {
   bg:       'Background',
   slot1:    'Antrian 1',
   slot2:    'Antrian 2',

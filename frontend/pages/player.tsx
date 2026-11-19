@@ -2,7 +2,7 @@ import { useEffect, useRef, useState, useCallback } from 'react';
 import Head from 'next/head';
 import { useRouter } from 'next/router';
 import { API_URL } from '../lib/api';
-import { DEFAULT_LAYOUT, LayoutConfig, ZoneRect, ScheduleRow, CustomZone } from '../lib/types';
+import { DEFAULT_LAYOUT, LayoutConfig, LayoutZones, ZoneRect, ScheduleRow, CustomZone } from '../lib/types';
 
 const CANVAS_W = 1920;
 const CANVAS_H = 1080;
@@ -249,7 +249,7 @@ export default function PlayerPage() {
 
   // ── Derived colors ─────────────────────────────────────
   const dark = darken(themeColor);
-  const slotKeys: (keyof LayoutConfig)[] = ['slot1', 'slot2', 'slot3', 'slot4', 'slot5'];
+  const slotKeys: (keyof LayoutZones)[] = ['slot1', 'slot2', 'slot3', 'slot4', 'slot5'];
 
   // ── Render ─────────────────────────────────────────────
   return (
@@ -289,7 +289,7 @@ export default function PlayerPage() {
 
           {/* Queue Slots */}
           {slotKeys.map((key, i) => {
-            const z = layout[key];
+            const z = layout[key] as ZoneRect;
             if (!z?.visible) return null;
             const slot = slots.find(s => s.slotNumber === i + 1) || {
               slotNumber: i + 1, loketName: `Loket ${i + 1}`, currentNumber: '000',
