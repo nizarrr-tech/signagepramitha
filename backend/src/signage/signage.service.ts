@@ -107,22 +107,6 @@ export class SignageService {
     });
   }
 
-  async getChannels() {
-    return this.prisma.tvChannel.findMany({ orderBy: { code: 'asc' } });
-  }
-
-  async createChannel(data: { code: number; name: string }) {
-    return this.prisma.tvChannel.upsert({
-      where:  { code: data.code },
-      update: { name: data.name },
-      create: data,
-    });
-  }
-
-  async deleteChannel(id: string) {
-    return this.prisma.tvChannel.delete({ where: { id } });
-  }
-
   async getClients() {
     return this.prisma.client.findMany({ orderBy: { id: 'asc' } });
   }

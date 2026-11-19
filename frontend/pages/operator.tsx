@@ -2,13 +2,77 @@ import { useState, useEffect, useCallback } from 'react';
 import toast from 'react-hot-toast';
 import {
   ChevronRight, RotateCcw, Hash, Settings, Loader2,
-  Volume2, RefreshCw, AlertCircle, CheckCircle2
+  Volume2, RefreshCw, AlertCircle, CheckCircle2,
+  Lock, Eye, EyeOff, X, LogOut
 } from 'lucide-react';
 import NavBar from '../components/NavBar';
 import { fetchQueue, callQueue, resetQueue, updateLoket } from '../lib/api';
 import { getSocket } from '../lib/socket';
 
-const CLIENT_ID = 'PRAMITHA';
+const CLIENT_ID    = 'PRAMITHA';
+const CMS_PASSWORD = 'pramitha2024'; // Harus sama dengan di admin.tsx
+const AUTH_KEY     = 'cms_auth_pramitha';
+
+// ─── Login screen (reuse dari admin) ─────────────────────
+function LoginScreen({ onLogin }: { onLogin: () => void }) {
+  const [pw,      setPw]      = useState('');
+  const [show,    setShow]    = useState(false);
+  const [error,   setError]   = useState('');
+  const [loading, setLoading] = useState(false);
+
+  const handleSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    setLoading(true);
+    setTimeout(() => {
+      if (pw === CMS_PASSWORD) {
+        sessionStorage.setItem(AUTH_KEY, '1');
+        onLogin();
+      } else {
+        setError('Password salah. Hubungi administrator.');
+        setPw('');
+      }
+      setLoading(false);
+    }, 600);
+  };
+
+  return (
+    <div className="min-h-screen bg-gray-950 flex items-center justify-center px-4">
+      <div className="w-full max-w-sm">
+        <div className="text-center mb-8">
+          <div className="w-16 h-16 rounded-2xl bg-red-600 flex items-center justify-center mx-auto mb-4 shadow-lg shadow-red-900/40">
+            <Lock size={30} className="text-white" />
+          </div>
+          <h1 className="text-2xl font-bold text-white">Panel Operator</h1>
+          <p className="text-gray-500 text-sm mt-1">Klinik Pramitha</p>
+        </div>
+        <div className="bg-gray-900 border border-gray-800 rounded-2xl p-7">
+          <form onSubmit={handleSubmit} className="space-y-4">
+            <div className="relative">
+              <input type={show ? 'text' : 'password'}
+                className="input pr-10 text-sm" placeholder="Password..."
+                value={pw} onChange={e => { setPw(e.target.value); setError(''); }} autoFocus />
+              <button type="button" onClick={() => setShow(!show)}
+                className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-500 hover:text-white">
+                {show ? <EyeOff size={16} /> : <Eye size={16} />}
+              </button>
+            </div>
+            {error && (
+              <div className="bg-red-950/50 border border-red-800 rounded-xl px-4 py-2.5 text-sm text-red-400 flex items-center gap-2">
+                <X size={14} /> {error}
+              </div>
+            )}
+            <button type="submit" disabled={loading || !pw}
+              className="w-full py-3 rounded-xl font-bold text-white flex items-center justify-center gap-2 disabled:opacity-50 bg-red-600 hover:bg-red-500">
+              {loading ? <Loader2 size={16} className="animate-spin" /> : <Lock size={16} />}
+              {loading ? 'Memverifikasi...' : 'Masuk'}
+            </button>
+          </form>
+          <p className="text-xs text-gray-600 text-center mt-5">Butuh akses? Hubungi administrator.</p>
+        </div>
+      </div>
+    </div>
+  );
+}
 
 interface Slot {
   id: string;
@@ -36,6 +100,22 @@ const BTN_COLORS = [
 ];
 
 export default function OperatorPage() {
+  const [authed,  setAuthed]  = useState(false);
+  const [checked, setChecked] = useState(false);
+
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      setAuthed(sessionStorage.getItem(AUTH_KEY) === '1');
+    }
+    setChecked(true);
+  }, []);
+
+  if (!checked) return null;
+  if (!authed)  return <LoginScreen onLogin={() => setAuthed(true)} />;
+  return <OperatorContent onLogout={() => { sessionStorage.removeItem(AUTH_KEY); setAuthed(false); }} />;
+}
+
+function OperatorContent({ onLogout }: { onLogout: () => void }) {
   const [slots, setSlots] = useState<Slot[]>([]);
   const [loading, setLoading] = useState(true);
   const [calling, setCalling] = useState<number | null>(null);
@@ -167,6 +247,11 @@ export default function OperatorPage() {
             </button>
             <button onClick={handleResetAll} className="btn-danger flex items-center gap-2 text-sm py-2">
               <RotateCcw size={14} /> Reset Semua
+            </button>
+            <button onClick={() => { if(confirm('Keluar?')) onLogout(); }}
+              className="flex items-center gap-2 px-3 py-2 rounded-lg border border-gray-700 text-gray-500 hover:text-red-400 hover:border-red-700 text-sm transition-colors"
+              title="Logout">
+              <LogOut size={14} />
             </button>
           </div>
         </div>

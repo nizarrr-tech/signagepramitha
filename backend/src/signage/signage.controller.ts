@@ -1,4 +1,4 @@
-import { Controller, Get, Post, Delete, Param, Body, NotFoundException } from '@nestjs/common';
+   import { Controller, Get, Post, Param, Body, NotFoundException } from '@nestjs/common';
 import { SignageService } from './signage.service';
 import { SignageGateway } from '../gateway/signage.gateway';
 
@@ -22,29 +22,6 @@ export class SignageController {
     const fullConfig = await this.signageService.getFullConfig(clientId);
     this.gateway.emitRefresh(clientId, fullConfig);
     return { message: 'Konten berhasil diperbarui dan dikirim ke layar', data: updated };
-  }
-
-  @Get(':clientId/channels')
-  async getChannels(@Param('clientId') clientId: string) {
-    return this.signageService.getChannels();
-  }
-}
-
-@Controller('api/channels')
-export class ChannelController {
-  constructor(private readonly signageService: SignageService) {}
-
-  @Get()
-  async getAll() { return this.signageService.getChannels(); }
-
-  @Post()
-  async create(@Body() body: { code: number; name: string }) {
-    return this.signageService.createChannel(body);
-  }
-
-  @Delete(':id')
-  async delete(@Param('id') id: string) {
-    return this.signageService.deleteChannel(id);
   }
 }
 
