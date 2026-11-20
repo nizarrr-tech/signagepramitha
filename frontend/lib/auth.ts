@@ -2,7 +2,6 @@
  * CMS Authentication
  * Password disimpan di backend (database), diverifikasi via API.
  */
-import { getServerUrl } from './network';
 
 const AUTH_KEY = 'cms_auth_pramitha';
 const EXP_KEY  = 'cms_auth_exp';
@@ -36,7 +35,11 @@ export function clearSession() {
 /** Verifikasi password ke backend */
 export async function verifyPassword(password: string): Promise<boolean> {
   try {
-    const url = getServerUrl();
+    // Coba ambil URL dari localStorage dulu, fallback ke Railway URL
+    const url = typeof window !== 'undefined'
+      ? (localStorage.getItem('signage_server_url') || process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001')
+      : (process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001');
+
     const res = await fetch(`${url}/api/auth/verify`, {
       method:  'POST',
       headers: { 'Content-Type': 'application/json' },

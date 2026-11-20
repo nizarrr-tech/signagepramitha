@@ -6,26 +6,26 @@
 import { useState } from 'react';
 import Head from 'next/head';
 import { Key, RefreshCw, Copy, Eye, EyeOff, Loader2, CheckCircle2, AlertTriangle } from 'lucide-react';
-import { getServerUrl } from '../lib/network';
 import toast from 'react-hot-toast';
 
-export default function PasswordPage() {
-  const [secret,    setSecret]    = useState('');
-  const [password,  setPassword]  = useState('');
-  const [createdAt, setCreatedAt] = useState('');
-  const [loading,   setLoading]   = useState(false);
-  const [generating,setGenerating]= useState(false);
-  const [show,      setShow]      = useState(false);
-  const [unlocked,  setUnlocked]  = useState(false);
+const DEFAULT_API = 'https://signagepramitha-production.up.railway.app';
 
-  const API = getServerUrl();
+export default function PasswordPage() {
+  const [secret,     setSecret]     = useState('');
+  const [apiUrl,     setApiUrl]     = useState(DEFAULT_API);
+  const [password,   setPassword]   = useState('');
+  const [createdAt,  setCreatedAt]  = useState('');
+  const [loading,    setLoading]    = useState(false);
+  const [generating, setGenerating] = useState(false);
+  const [show,       setShow]       = useState(false);
+  const [unlocked,   setUnlocked]   = useState(false);
 
   const fetchPassword = async () => {
     if (!secret.trim()) return toast.error('Masukkan Admin Secret');
     setLoading(true);
     try {
-      const res = await fetch(`${API}/api/auth/password`, {
-        headers: { 'x-admin-secret': secret },
+      const res = await fetch(`${apiUrl}/api/auth/password`, {
+        headers: { 'x-admin-secret': secret.trim() },
       });
       if (!res.ok) { toast.error('Secret salah atau akses ditolak'); return; }
       const data = await res.json();
@@ -41,9 +41,9 @@ export default function PasswordPage() {
     if (!confirm('Generate password baru? Password lama tidak bisa dipakai lagi.')) return;
     setGenerating(true);
     try {
-      const res = await fetch(`${API}/api/auth/generate`, {
+      const res = await fetch(`${apiUrl}/api/auth/generate`, {
         method: 'POST',
-        headers: { 'x-admin-secret': secret },
+        headers: { 'x-admin-secret': secret.trim() },
       });
       if (!res.ok) { toast.error('Gagal generate password'); return; }
       const data = await res.json();
@@ -86,10 +86,19 @@ export default function PasswordPage() {
                 environment variable Railway untuk mengakses panel ini.
               </p>
               <div className="space-y-3">
-                <input className="input text-sm font-mono" type="password"
-                  placeholder="Admin secret key..."
-                  value={secret} onChange={e => setSecret(e.target.value)}
-                  onKeyDown={e => e.key === 'Enter' && fetchPassword()} autoFocus />
+                <div>
+                  <label className="text-xs text-gray-500 mb-1 block">URL Backend (Railway)</label>
+                  <input className="input text-sm font-mono" type="text"
+                    placeholder="https://xxx.up.railway.app"
+                    value={apiUrl} onChange={e => setApiUrl(e.target.value.trim())} />
+                </div>
+                <div>
+                  <label className="text-xs text-gray-500 mb-1 block">Admin Secret Key</label>
+                  <input className="input text-sm font-mono" type="password"
+                    placeholder="Masukkan ADMIN_SECRET dari Railway..."
+                    value={secret} onChange={e => setSecret(e.target.value)}
+                    onKeyDown={e => e.key === 'Enter' && fetchPassword()} autoFocus />
+                </div>
                 <button onClick={fetchPassword} disabled={loading || !secret.trim()}
                   className="w-full py-2.5 rounded-xl bg-yellow-700 hover:bg-yellow-600 text-white font-bold text-sm flex items-center justify-center gap-2 disabled:opacity-50">
                   {loading ? <Loader2 size={15} className="animate-spin" /> : <Key size={15} />}
