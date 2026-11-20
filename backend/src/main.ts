@@ -26,7 +26,7 @@ async function bootstrap() {
       /\.railway\.app$/,
     ],
     methods: 'GET,HEAD,PUT,PATCH,POST,DELETE,OPTIONS',
-    allowedHeaders: 'Content-Type, Accept, Authorization',
+    allowedHeaders: 'Content-Type, Accept, Authorization, x-admin-secret',
     credentials: true,
   });
 
