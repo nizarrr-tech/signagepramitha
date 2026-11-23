@@ -1,11 +1,13 @@
 import { useEffect, useRef, useState, useCallback } from 'react';
 import Head from 'next/head';
 import { useRouter } from 'next/router';
-import { API_URL } from '../lib/api';
 import {
   DEFAULT_LAYOUT, LayoutConfig, LayoutZones,
   ZoneRect, ScheduleRow, CustomZone
 } from '../lib/types';
+
+// URL backend — SSR safe, hanya pakai env variable
+const DEFAULT_API = process.env.NEXT_PUBLIC_API_URL || 'https://signagepramitha-production.up.railway.app';
 
 const CANVAS_W = 1920;
 const CANVAS_H = 1080;
@@ -94,7 +96,7 @@ function buildSlideshow(zone: HTMLDivElement, urls: string[], base: string) {
 export default function PlayerPage() {
   const router   = useRouter();
   const clientId = (router.query.client as string) || 'PRAMITHA';
-  const apiUrl   = (router.query.api    as string) || API_URL;
+  const apiUrl   = (router.query.api    as string) || DEFAULT_API;
 
   // ── ALL refs declared at top level ───────────────────────
   const canvasRef       = useRef<HTMLDivElement>(null);
@@ -551,4 +553,9 @@ function FsBtn({ color }: { color: string }) {
       {isFs?'✕ Keluar Fullscreen':'⛶ Fullscreen'}
     </button>
   );
+}
+
+// Disable SSR sepenuhnya untuk halaman player
+export async function getServerSideProps() {
+  return { props: {} };
 }
