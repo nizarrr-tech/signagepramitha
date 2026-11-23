@@ -83,9 +83,7 @@ export default function PlayerPage() {
   const apiUrl   = (router.query.api    as string) || API_URL;
 
   const canvasRef    = useRef<HTMLDivElement>(null);
-  const videoRef     = useRef<HTMLVideoElement>(null);
   const slideZoneRef = useRef<HTMLDivElement>(null);
-  const videoIdxRef  = useRef(0);
   const slideIdxRef  = useRef(0);
   const slideTimer   = useRef<ReturnType<typeof setInterval> | null>(null);
 
@@ -135,19 +133,38 @@ export default function PlayerPage() {
     return () => clearInterval(id);
   }, []);
 
-  // ── Video ──────────────────────────────────────────────
+  // ── Video (sekarang slideshow gambar utama) ──────────────
   const playVideo = useCallback((urls: string[]) => {
-    const video = videoRef.current;
-    if (!video || !urls.length) return;
-    videoIdxRef.current = 0;
-    const next = () => {
-      video.src = apiUrl + urls[videoIdxRef.current];
-      video.load();
-      video.play().catch(() => {});
-    };
-    video.onended = () => { videoIdxRef.current = (videoIdxRef.current + 1) % urls.length; next(); };
-    video.onerror = () => { videoIdxRef.current = (videoIdxRef.current + 1) % urls.length; setTimeout(next, 1000); };
-    next();
+    // Fungsi ini sekarang handle slideshow gambar di zona video
+    // Implementasi di initMainSlideshow
+  }, []);
+
+  // ── Main slideshow (zona video) ───────────────────────────
+  const mainSlideRef = useRef<HTMLDivElement>(null);
+  const mainSlideIdx = useRef(0);
+  const mainSlideTimer = useRef<ReturnType<typeof setInterval> | null>(null);
+
+  const initMainSlideshow = useCallback((urls: string[]) => {
+    const zone = mainSlideRef.current;
+    if (!zone) return;
+    if (mainSlideTimer.current) clearInterval(mainSlideTimer.current);
+    zone.innerHTML = '';
+    if (!urls.length) return;
+    mainSlideIdx.current = 0;
+    urls.forEach((url, i) => {
+      const img = document.createElement('img');
+      img.src = apiUrl + url;
+      img.style.cssText = `position:absolute;inset:0;width:100%;height:100%;object-fit:cover;opacity:${i===0?1:0};transition:opacity 1.2s ease-in-out;`;
+      zone.appendChild(img);
+    });
+    if (urls.length > 1) {
+      mainSlideTimer.current = setInterval(() => {
+        const imgs = zone.querySelectorAll('img');
+        (imgs[mainSlideIdx.current] as HTMLElement).style.opacity = '0';
+        mainSlideIdx.current = (mainSlideIdx.current + 1) % imgs.length;
+        (imgs[mainSlideIdx.current] as HTMLElement).style.opacity = '1';
+      }, 5000);
+    }
   }, [apiUrl]);
 
   // ── Slideshow ──────────────────────────────────────────
@@ -181,14 +198,14 @@ export default function PlayerPage() {
     setThemeColor(c.themeColor  || '#dc2626');
     setClinicName(c.clinicName  || 'Klinik Pramitha');
     setBgUrl(c.backgroundUrl    || '');
-    setVideoUrls(c.videoUrls    || []);
+    setVideoUrls(c.videoUrls    || []); // videoUrls = gambar utama
     setRunningText(c.runningText || 'Selamat datang...');
     setScheduleRows(c.scheduleTable || []);
     setSlots(d.queueSlots       || []);
-    playVideo(c.videoUrls       || []);
-    initSlideshow(c.slideUrls   || []);
+    initMainSlideshow(c.videoUrls || []); // gambar utama di zona video
+    initSlideshow(c.slideUrls   || []); // gambar bawah di zona slide
     try { localStorage.setItem(`sc_${clientId}`, JSON.stringify(d)); } catch {}
-  }, [playVideo, initSlideshow, clientId]);
+  }, [initMainSlideshow, initSlideshow, clientId]);
 
   // ── Load config ────────────────────────────────────────
   const loadConfig = useCallback(async () => {
@@ -338,35 +355,35 @@ export default function PlayerPage() {
             );
           })}
 
-          {/* Video */}
+          {/* Zona Gambar Utama (sebelumnya video) */}
           {layout.video?.visible && (
-            <div style={{ ...zs(layout.video), zIndex: 10, borderRadius: 16, background: '#000',
-              border: `3px solid ${h2r(themeColor, 0.3)}`,
-              boxShadow: '0 8px 40px rgba(0,0,0,.5)' }}>
-              {videoUrls.length > 0 ? (
-                <video ref={videoRef} autoPlay muted playsInline
-                  style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
-              ) : (
-                <div style={{ width: '100%', height: '100%', display: 'flex', flexDirection: 'column',
-                  alignItems: 'center', justifyContent: 'center',
-                  background: `radial-gradient(circle,${h2r(dark, 0.8)} 0%,#000 100%)` }}>
-                  <div style={{ width: 80, height: 80, borderRadius: '50%',
-                    border: `2px solid ${h2r(themeColor, 0.4)}`,
-                    background: h2r(themeColor, 0.15),
-                    display: 'flex', alignItems: 'center', justifyContent: 'center', marginBottom: 16 }}>
-                    <svg width="36" height="36" viewBox="0 0 24 24" fill="white" opacity={0.5}>
-                      <path d="M8 5v14l11-7z" />
-                    </svg>
+            <div style={{ ...zs(layout.video), zIndex:10, borderRadius:16, background:'#000',
+              border:`3px solid ${h2r(themeColor,0.3)}`,
+              boxShadow:'0 8px 40px rgba(0,0,0,.5)' }}>
+              {/* Slideshow gambar utama */}
+              <div ref={mainSlideRef} style={{ position:'absolute', inset:0, borderRadius:14, overflow:'hidden' }}>
+                {videoUrls.length === 0 && (
+                  <div style={{ width:'100%', height:'100%', display:'flex', flexDirection:'column',
+                    alignItems:'center', justifyContent:'center',
+                    background:`radial-gradient(circle,${h2r(dark,0.8)} 0%,#000 100%)` }}>
+                    <div style={{ width:80, height:80, borderRadius:'50%',
+                      border:`2px solid ${h2r(themeColor,0.4)}`,
+                      background:h2r(themeColor,0.15),
+                      display:'flex', alignItems:'center', justifyContent:'center', marginBottom:16 }}>
+                      <svg width="36" height="36" viewBox="0 0 24 24" fill="white" opacity={0.5}>
+                        <path d="M21 19V5c0-1.1-.9-2-2-2H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.1 2-2zM8.5 13.5l2.5 3.01L14.5 12l4.5 6H5l3.5-4.5z"/>
+                      </svg>
+                    </div>
+                    <span style={{ color:h2r('#fff',0.3), fontSize:22 }}>Menunggu gambar...</span>
                   </div>
-                  <span style={{ color: h2r('#fff', 0.3), fontSize: 22 }}>Menunggu video...</span>
-                </div>
-              )}
-              {/* clinic name overlay */}
-              <div style={{ position: 'absolute', top: 0, left: 0, zIndex: 5,
-                background: `linear-gradient(90deg,${h2r(dark, 0.9)},transparent)`,
-                padding: '10px 36px 10px 20px', borderRadius: '13px 0 0 0',
-                fontSize: 22, fontWeight: 800, color: '#fff', letterSpacing: 1,
-                textTransform: 'uppercase', textShadow: '0 2px 6px rgba(0,0,0,.4)' }}>
+                )}
+              </div>
+              {/* Clinic name overlay */}
+              <div style={{ position:'absolute', top:0, left:0, zIndex:5,
+                background:`linear-gradient(90deg,${h2r(dark,0.9)},transparent)`,
+                padding:'10px 36px 10px 20px', borderRadius:'13px 0 0 0',
+                fontSize:22, fontWeight:800, color:'#fff', letterSpacing:1,
+                textTransform:'uppercase', textShadow:'0 2px 6px rgba(0,0,0,.4)' }}>
                 {clinicName}
               </div>
             </div>

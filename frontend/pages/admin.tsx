@@ -1,9 +1,10 @@
 import { useState, useEffect, useCallback } from 'react';
 import toast from 'react-hot-toast';
 import {
-  Monitor, Film, Image as ImageIcon, AlignLeft, Calendar,
+  Monitor, Image as ImageIcon, AlignLeft, Calendar,
   Send, Loader2, Layout, Settings,
-  Eye, Upload, X, ChevronRight, Palette, Lock, LogOut
+  Eye, Upload, X, ChevronRight, Palette, Lock, LogOut,
+  GripVertical, ArrowUp, ArrowDown
 } from 'lucide-react';
 import NavBar from '../components/NavBar';
 import LoginGate from '../components/LoginGate';
@@ -12,7 +13,7 @@ import ScheduleEditor from '../components/ScheduleEditor';
 import LayoutEditor from '../components/LayoutEditor';
 import {
   fetchSignageConfig, updateSignageContent,
-  fetchVideos, fetchImages, uploadFile, API_URL,
+  fetchImages, uploadFile, API_URL,
 } from '../lib/api';
 import { clearSession } from '../lib/auth';
 import {
@@ -26,7 +27,7 @@ const TABS = [
   { id: 'content',  label: 'Konten',        icon: Monitor   },
   { id: 'layout',   label: 'Layout Editor',  icon: Layout    },
   { id: 'schedule', label: 'Jadwal',         icon: Calendar  },
-  { id: 'media',    label: 'Media Library',  icon: Film      },
+  { id: 'media',    label: 'Media Library',  icon: ImageIcon },
   { id: 'settings', label: 'Pengaturan',     icon: Settings  },
 ] as const;
 
@@ -48,27 +49,25 @@ function AdminContent() {
   const [publishing, setPublishing] = useState(false);
   const [tab,        setTab]        = useState<TabId>('content');
 
-  const [videoUrls,     setVideoUrls]     = useState<string[]>([]);
-  const [slideUrls,     setSlideUrls]     = useState<string[]>([]);
+  const [mainImages,    setMainImages]    = useState<string[]>([]); // playlist gambar zona video
+  const [slideUrls,     setSlideUrls]     = useState<string[]>([]); // slideshow bawah
   const [backgroundUrl, setBackgroundUrl] = useState('');
   const [runningText,   setRunningText]   = useState('');
   const [scheduleTable, setScheduleTable] = useState<ScheduleRow[]>([]);
   const [layoutConfig,  setLayoutConfig]  = useState<LayoutConfig>(DEFAULT_LAYOUT);
   const [clinicName,    setClinicName]    = useState('Klinik Pramitha');
   const [themeColor,    setThemeColor]    = useState('#dc2626');
-  const [videos,        setVideos]        = useState<Media[]>([]);
   const [images,        setImages]        = useState<Media[]>([]);
   const [bgUploading,   setBgUploading]   = useState(false);
 
   const loadAll = useCallback(async () => {
     try {
-      const [cfg, vids, imgs] = await Promise.all([
+      const [cfg, imgs] = await Promise.all([
         fetchSignageConfig(CLIENT_ID),
-        fetchVideos(),
         fetchImages(),
       ]);
       const c: SignageContent = cfg.data.content;
-      setVideoUrls(c.videoUrls       || []);
+      setMainImages(c.videoUrls      || []); // videoUrls dipakai sebagai playlist gambar utama
       setSlideUrls(c.slideUrls       || []);
       setBackgroundUrl(c.backgroundUrl || '');
       setRunningText(c.runningText    || '');
@@ -76,7 +75,6 @@ function AdminContent() {
       setLayoutConfig(c.layoutConfig  || DEFAULT_LAYOUT);
       setClinicName(c.clinicName      || 'Klinik Pramitha');
       setThemeColor(c.themeColor      || '#dc2626');
-      setVideos(vids.data);
       setImages(imgs.data);
     } catch { toast.error('Gagal memuat konfigurasi'); }
     finally { setLoading(false); }
@@ -88,8 +86,14 @@ function AdminContent() {
     setPublishing(true);
     try {
       await updateSignageContent(CLIENT_ID, {
-        videoUrls, slideUrls, backgroundUrl, runningText,
-        scheduleTable, layoutConfig, clinicName, themeColor,
+        videoUrls:    mainImages, // simpan sebagai videoUrls di DB
+        slideUrls,
+        backgroundUrl,
+        runningText,
+        scheduleTable,
+        layoutConfig,
+        clinicName,
+        themeColor,
       });
       toast.success('✅ Konten berhasil dikirim ke layar!', { duration: 4000 });
     } catch (err: any) {
@@ -212,26 +216,48 @@ function AdminContent() {
                 </div>
               </div>
 
-              {/* Video */}
+              {/* Playlist Gambar Utama (zona video) */}
               <div className="bg-gray-900 border border-gray-800 rounded-2xl p-5">
-                <h2 className="text-sm font-bold text-white mb-4 flex items-center gap-2">
-                  <Film size={16} className="text-purple-400" /> Playlist Video
-                  <span className="ml-auto text-xs text-gray-500 bg-gray-800 px-2 py-0.5 rounded-full">{videoUrls.length} dipilih</span>
+                <h2 className="text-sm font-bold text-white mb-1 flex items-center gap-2">
+                  <ImageIcon size={16} className="text-purple-400" /> Playlist Gambar Utama
+                  <span className="ml-auto text-xs text-gray-500 bg-gray-800 px-2 py-0.5 rounded-full">{mainImages.length} dipilih</span>
                 </h2>
-                <MediaUpload type="VIDEO" items={videos}
-                  onRefresh={() => fetchVideos().then(r => setVideos(r.data))}
-                  onSelect={url => setVideoUrls(p => p.includes(url) ? p.filter(u => u !== url) : [...p, url])}
-                  selectedUrls={videoUrls} label="Klik untuk pilih / batalkan" />
-                {videoUrls.length > 0 && (
-                  <div className="mt-3 space-y-1">
-                    {videoUrls.map((url, i) => (
-                      <div key={url} className="flex items-center gap-2 bg-gray-800 rounded-lg px-3 py-1.5">
-                        <span className="text-gray-600 text-xs w-4">{i+1}</span>
-                        <Film size={12} className="text-purple-400 flex-shrink-0" />
-                        <span className="text-gray-300 text-xs flex-1 truncate font-mono">{url}</span>
-                        <button onClick={() => setVideoUrls(p => p.filter(u => u !== url))} className="text-red-500 hover:text-red-400"><X size={12} /></button>
-                      </div>
-                    ))}
+                <p className="text-xs text-gray-500 mb-4">Gambar tampil bergantian di zona tengah layar (1274×622px). Bisa diurutkan.</p>
+                <MediaUpload type="IMAGE" items={images}
+                  onRefresh={() => fetchImages().then(r => setImages(r.data))}
+                  onSelect={url => setMainImages(p => p.includes(url) ? p.filter(u => u !== url) : [...p, url])}
+                  selectedUrls={mainImages} label="Klik gambar untuk pilih / batalkan" />
+                {/* Urutan playlist */}
+                {mainImages.length > 0 && (
+                  <div className="mt-4">
+                    <p className="text-xs text-gray-500 mb-2 font-semibold uppercase tracking-wide">Urutan Tampil (seret untuk atur)</p>
+                    <div className="space-y-1.5">
+                      {mainImages.map((url, i) => (
+                        <div key={url} className="flex items-center gap-2 bg-gray-800 rounded-xl px-3 py-2 group">
+                          <span className="text-gray-600 text-xs w-5 text-center">{i+1}</span>
+                          <img src={`${API_URL}${url}`} className="w-10 h-7 object-cover rounded flex-shrink-0" alt="" />
+                          <span className="text-gray-300 text-xs flex-1 truncate font-mono">{url.split('/').pop()}</span>
+                          <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                            <button
+                              onClick={() => { if(i===0) return; const a=[...mainImages]; [a[i-1],a[i]]=[a[i],a[i-1]]; setMainImages(a); }}
+                              disabled={i===0}
+                              className="p-1 text-gray-500 hover:text-white disabled:opacity-30">
+                              <ArrowUp size={12} />
+                            </button>
+                            <button
+                              onClick={() => { if(i===mainImages.length-1) return; const a=[...mainImages]; [a[i],a[i+1]]=[a[i+1],a[i]]; setMainImages(a); }}
+                              disabled={i===mainImages.length-1}
+                              className="p-1 text-gray-500 hover:text-white disabled:opacity-30">
+                              <ArrowDown size={12} />
+                            </button>
+                            <button onClick={() => setMainImages(p => p.filter(u => u !== url))}
+                              className="p-1 text-red-500 hover:text-red-400">
+                              <X size={12} />
+                            </button>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
                   </div>
                 )}
               </div>
@@ -290,10 +316,10 @@ function AdminContent() {
                 <h2 className="text-sm font-bold text-white mb-4">📊 Ringkasan</h2>
                 <div className="space-y-2.5">
                   {[
-                    { label: 'Video',      val: videoUrls.length,     unit: 'file',   color: 'text-purple-400' },
-                    { label: 'Slide',      val: slideUrls.length,     unit: 'gambar', color: 'text-green-400' },
-                    { label: 'Jadwal',     val: scheduleTable.length, unit: 'baris',  color: 'text-orange-400' },
-                    { label: 'Background', val: backgroundUrl ? '✓' : '—', unit: '', color: 'text-yellow-400' },
+                    { label: 'Gambar Utama', val: mainImages.length,    unit: 'gambar', color: 'text-purple-400' },
+                    { label: 'Slide bawah',  val: slideUrls.length,     unit: 'gambar', color: 'text-green-400' },
+                    { label: 'Jadwal',       val: scheduleTable.length, unit: 'baris',  color: 'text-orange-400' },
+                    { label: 'Background',   val: backgroundUrl ? '✓' : '—', unit: '', color: 'text-yellow-400' },
                   ].map(item => (
                     <div key={item.label} className="flex items-center justify-between py-2 border-b border-gray-800 last:border-0">
                       <span className="text-gray-400 text-sm">{item.label}</span>
@@ -367,16 +393,7 @@ function AdminContent() {
 
         {/* MEDIA */}
         {tab === 'media' && (
-          <div className="grid grid-cols-1 xl:grid-cols-2 gap-5">
-            <div className="bg-gray-900 border border-gray-800 rounded-2xl p-5">
-              <h2 className="text-sm font-bold text-white mb-4 flex items-center gap-2">
-                <Film size={16} className="text-purple-400" /> Library Video
-                <span className="ml-auto text-xs text-gray-500">{videos.length} file</span>
-              </h2>
-              <MediaUpload type="VIDEO" items={videos}
-                onRefresh={() => fetchVideos().then(r => setVideos(r.data))}
-                label="Upload video MP4/WebM" />
-            </div>
+          <div className="max-w-2xl">
             <div className="bg-gray-900 border border-gray-800 rounded-2xl p-5">
               <h2 className="text-sm font-bold text-white mb-4 flex items-center gap-2">
                 <ImageIcon size={16} className="text-green-400" /> Library Gambar
@@ -384,7 +401,7 @@ function AdminContent() {
               </h2>
               <MediaUpload type="IMAGE" items={images}
                 onRefresh={() => fetchImages().then(r => setImages(r.data))}
-                label="Upload gambar JPG/PNG" />
+                label="Upload gambar JPG/PNG/WebP" />
             </div>
           </div>
         )}
